@@ -1,0 +1,72 @@
+# SPDX-FileCopyrightText: 2026 Sebastien Rousseau
+# SPDX-License-Identifier: MIT OR Apache-2.0
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: sebastienrousseau/agtmls
+          path: .agtmls
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: sebastienrousseau/agtmls-spec
+          path: .spec
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - env:
+          AGTMLS_HOME: ${{ github.workspace }}/.agtmls
+          AGTMLS_SPEC: ${{ github.workspace }}/.spec
+        run: cargo test --all-features
+
+      # The protocol surface, driven as a client drives it. Handler tests do
+      # not prove the binary speaks JSON-RPC over a pipe.
+      - name: stdio transport
+        env:
+          AGTMLS_HOME: ${{ github.workspace }}/.agtmls
+          AGTMLS_SPEC: ${{ github.workspace }}/.spec
+        run: |
+          cargo build --release
+          OUT=$(printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize"}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+            | ./target/release/agtmls-mcp 2>/dev/null)
+          echo "$OUT"
+          echo "$OUT" | grep -q '"protocolVersion"' || { echo "::error::no initialize reply"; exit 1; }
+          echo "$OUT" | grep -q 'agtmls_audit'     || { echo "::error::tools/list omitted agtmls_audit"; exit 1; }
+
+  docs:
+    name: rustdoc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772 # master
+        with:
+          toolchain: stable
+      - run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps

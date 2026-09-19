@@ -1,0 +1,41 @@
+# SPDX-FileCopyrightText: 2026 Sebastien Rousseau
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+[package]
+name = "agtmls-mcp"
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.86.0"
+license = "MIT OR Apache-2.0"
+description = "Model Context Protocol server for the AgtMLS agent skills registry: search, read, audit and verify skills over JSON-RPC"
+repository = "https://github.com/sebastienrousseau/agtmls-mcp"
+homepage = "https://github.com/sebastienrousseau/agtmls-mcp"
+documentation = "https://docs.rs/agtmls-mcp"
+readme = "README.md"
+keywords = ["mcp", "agent", "skills", "registry", "security"]
+categories = ["command-line-utilities", "development-tools"]
+authors = ["Sebastien Rousseau <sebastian.rousseau@gmail.com>"]
+
+[lib]
+name = "agtmls_mcp"
+path = "src/lib.rs"
+
+[[bin]]
+name = "agtmls-mcp"
+path = "src/main.rs"
+
+[dependencies]
+# Pinned by revision until agtmls-core is published to crates.io, then by
+# version. Strict lockstep: the MCP surface reports findings by rule id, so a
+# core whose rule set differs would make this server's answers differ from the
+# CLI's for the same input.
+agtmls-core = { git = "https://github.com/sebastienrousseau/agtmls-core", rev = "181d3189d817b224907cba65e65753f7fbfc30e5" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+[lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }

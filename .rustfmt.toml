@@ -1,0 +1,1 @@
+# Intentionally minimal: pins rustfmt to its DEFAULTS, which is what CI enforces.
