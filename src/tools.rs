@@ -4,6 +4,7 @@
 //! Tools, resources and prompts exposed over MCP.
 
 use std::collections::BTreeMap;
+use std::fmt::Write as _;
 use std::path::Path;
 
 use agtmls_core::{Analyzer, RuleSet, digest, lockfile, skill};
@@ -167,14 +168,15 @@ fn findings_report(findings: &[agtmls_core::Finding]) -> String {
     }
     let mut out = format!("{} finding(s):\n", findings.len());
     for f in findings {
-        out.push_str(&format!(
-            "  [{}] {}:{} ({}) {}\n",
+        let _ = writeln!(
+            out,
+            "  [{}] {}:{} ({}) {}",
             f.severity,
             f.file.display(),
             f.line,
             f.rule,
             f.message
-        ));
+        );
     }
     out
 }
@@ -270,13 +272,14 @@ pub fn call(name: &str, args: &Value, registry: Option<&Registry>) -> Result<Str
             }
             let mut out = String::new();
             for problem in &problems {
-                out.push_str(&format!("{problem:?}\n"));
+                let _ = writeln!(out, "{problem:?}");
             }
-            out.push_str(&format!(
+            let _ = write!(
+                out,
                 "\n{} problem(s); {} affect integrity.",
                 problems.len(),
                 problems.iter().filter(|p| p.is_integrity_failure()).count()
-            ));
+            );
             Ok(out)
         }
         other => Err(format!("unknown tool: {other}")),
