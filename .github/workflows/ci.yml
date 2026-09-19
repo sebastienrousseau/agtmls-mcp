@@ -29,10 +29,6 @@ jobs:
         with:
           repository: sebastienrousseau/agtmls
           path: .agtmls
-          # TEMPORARY: agtmls' work lives on feat/v0.0.6 and main predates it,
-          # so a default checkout has neither scripts/_lib nor the integrity
-          # digests. Drop this ref once feat/v0.0.6 is merged.
-          ref: feat/v0.0.6
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: sebastienrousseau/agtmls-spec
