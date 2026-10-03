@@ -16,7 +16,7 @@ dependencies = [
 
 [[package]]
 name = "agtmls-mcp"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "agtmls-core",
  "serde",

@@ -1,0 +1,37 @@
+{
+  "$schema": "https://glama.ai/api/mcp/v1/schemas/glama.json",
+  "maintainers": [
+    "sebastienrousseau"
+  ],
+  "title": "agtmls-mcp",
+  "display_name": "AgtMLS MCP",
+  "description": "Model Context Protocol server for the AgtMLS agent skills registry: search, read, audit and verify skills over JSON-RPC. Statically analyse skill content for prompt injection, invisible-character smuggling, capability escalation and unsafe execution.",
+  "version": "0.0.2",
+  "repository": "https://github.com/sebastienrousseau/agtmls-mcp",
+  "homepage": "https://github.com/sebastienrousseau/agtmls-mcp",
+  "license": "Apache-2.0 OR MIT",
+  "language": "Rust",
+  "runtime": "cargo",
+  "categories": [
+    "developer-tools",
+    "security"
+  ],
+  "tags": [
+    "mcp",
+    "agent",
+    "skills",
+    "security",
+    "prompt-injection",
+    "audit",
+    "registry",
+    "rust"
+  ],
+  "mcpServers": {
+    "agtmls": {
+      "command": "agtmls-mcp"
+    }
+  },
+  "installation": {
+    "cargo": "cargo install agtmls-mcp"
+  }
+}

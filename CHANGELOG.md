@@ -3,7 +3,19 @@
 
 # Changelog
 
-## Unreleased
+## [Unreleased]
+
+## [0.0.2] - 2026-10-03
+
+### Added
+
+- Terminal demo animation `.github/demo.gif` and VHS tape `.github/demo.tape` with `make demo` target.
+- Developer `Makefile` supporting `all`, `check`, `clippy`, `test`, `fmt`, `demo`, and `clean`.
+- Directory and registry manifests `glama.json` and `server.json`.
+- Complete dual licensing under `Apache-2.0 OR MIT` with `LICENSES/` directory and root `LICENSE`.
+- Development invariants and verification gates documentation in `AGENTS.md`.
+
+## [0.0.1] - 2026-09-19
 
 ### Added
 

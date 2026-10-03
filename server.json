@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.sebastienrousseau/agtmls-mcp",
+  "title": "agtmls-mcp",
+  "description": "Model Context Protocol server for the AgtMLS agent skills registry: search, read, audit and verify skills over JSON-RPC.",
+  "repository": {
+    "url": "https://github.com/sebastienrousseau/agtmls-mcp",
+    "source": "github"
+  },
+  "version": "0.0.2",
+  "packages": [
+    {
+      "registryType": "cargo",
+      "identifier": "agtmls-mcp",
+      "version": "0.0.2",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
