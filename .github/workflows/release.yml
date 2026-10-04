@@ -61,6 +61,7 @@ jobs:
     name: Publish to crates.io
     needs: verify
     if: startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != true
+    continue-on-error: true
     runs-on: ubuntu-latest
     environment: crates-io
     permissions:
