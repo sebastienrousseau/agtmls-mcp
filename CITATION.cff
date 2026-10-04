@@ -9,4 +9,5 @@ authors:
 repository-code: "https://github.com/sebastienrousseau/agtmls-mcp"
 abstract: "Model Context Protocol server for the AgtMLS skill registry."
 license: "Apache-2.0 OR MIT"
-version: 0.0.1
+version: 0.0.2
+date-released: "2026-10-03"

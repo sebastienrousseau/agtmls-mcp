@@ -3,10 +3,10 @@
 
 [package]
 name = "agtmls-mcp"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2024"
 rust-version = "1.86.0"
-license = "MIT OR Apache-2.0"
+license = "Apache-2.0 OR MIT"
 description = "Model Context Protocol server for the AgtMLS agent skills registry: search, read, audit and verify skills over JSON-RPC"
 repository = "https://github.com/sebastienrousseau/agtmls-mcp"
 homepage = "https://github.com/sebastienrousseau/agtmls-mcp"
