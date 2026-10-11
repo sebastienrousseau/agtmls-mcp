@@ -9,11 +9,12 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/sebastienrousseau/agtmls-mcp/actions"><img src="https://img.shields.io/github/actions/workflow/status/sebastienrousseau/agtmls-mcp/ci.yml?style=for-the-badge&logo=github" alt="Build" /></a>
-  <a href="https://crates.io/crates/agtmls-mcp"><img src="https://img.shields.io/crates/v/agtmls-mcp.svg?style=for-the-badge&color=fc8d62&logo=rust" alt="Registry" /></a>
-  <a href="https://docs.rs/agtmls-mcp"><img src="https://img.shields.io/badge/docs.rs-agtmls--mcp-66c2a5?style=for-the-badge&labelColor=555555&logo=docs.rs" alt="Docs" /></a>
+  <a href="https://github.com/sebastienrousseau/agtmls-mcp/actions"><img src="https://github.com/sebastienrousseau/agtmls-mcp/workflows/ci/badge.svg?style=for-the-badge&logo=github" alt="Build" /></a>
+  <a href="https://github.com/sebastienrousseau/agtmls-mcp/releases"><img src="https://img.shields.io/github/v/release/sebastienrousseau/agtmls-mcp?style=for-the-badge&color=fc8d62&logo=github&label=Release" alt="Release" /></a>
+  <a href="https://github.com/sebastienrousseau/agtmls-mcp#readme"><img src="https://img.shields.io/badge/docs-reference-blue.svg?style=for-the-badge&labelColor=555555&logo=markdown" alt="Docs" /></a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/sebastienrousseau/agtmls-mcp"><img src="https://img.shields.io/ossf-scorecard/github.com/sebastienrousseau/agtmls-mcp?style=for-the-badge&label=OpenSSF%20Scorecard&logo=openssf" alt="OpenSSF Scorecard" /></a>
   <a href="LICENSE-APACHE"><img src="https://img.shields.io/badge/license-Apache--2.0%20OR%20MIT-blue.svg?style=for-the-badge" alt="License: Apache-2.0 OR MIT" /></a>
+  <a href="https://github.com/sebastienrousseau/agtmls-mcp/blob/main/Cargo.toml"><img src="https://img.shields.io/badge/rust-1.86.0%2B-93450a.svg?style=for-the-badge&logo=rust" alt="Rust 1.86.0+" /></a>
   <a href="https://glama.ai/mcp/servers/sebastienrousseau/agtmls-mcp"><img src="https://glama.ai/mcp/servers/sebastienrousseau/agtmls-mcp/badges/score.svg" alt="Glama MCP server score" /></a>
 </p>
 
