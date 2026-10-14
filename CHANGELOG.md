@@ -3,7 +3,13 @@
 
 # Changelog
 
-## [Unreleased]
+## [0.0.3] - Unreleased
+
+### Changed
+
+- **The MSRV is now Rust 1.89.0** (was 1.86.0), the floor shared by the
+  portfolio's Rust repositories. `rust-version` and the README badge move
+  together.
 
 ## [0.0.2] - 2026-10-03
 
