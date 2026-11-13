@@ -5,6 +5,14 @@
 
 ## [0.0.3] - Unreleased
 
+### Added
+
+- `prompts/get` handler rendering `review-skill` and `harden-skill` messages and
+  rejecting missing required arguments with JSON-RPC `-32602`.
+- Read-only behaviour annotations (`readOnlyHint`, `destructiveHint`,
+  `idempotentHint`, `openWorldHint`), human titles, parameter descriptions and
+  constraints, and `outputSchema` / `structuredContent` across all five tools.
+
 ### Changed
 
 - `KEYS.asc` trusts a second maintainer signing key,

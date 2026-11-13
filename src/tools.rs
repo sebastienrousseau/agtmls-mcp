@@ -11,6 +11,7 @@ use agtmls_core::{Analyzer, RuleSet, digest, lockfile, skill};
 use serde_json::{Value, json};
 
 use crate::registry::Registry;
+use crate::schemas;
 
 /// Returned when a request needs a registry and none was found.
 pub const NO_REGISTRY: &str = "no registry loaded. Set AGTMLS_HOME, or pass --registry, pointing at a checkout of \
@@ -37,68 +38,11 @@ fn rules() -> Result<RuleSet, String> {
 #[must_use]
 pub fn descriptors() -> Vec<Value> {
     vec![
-        json!({
-            "name": "agtmls_search",
-            "description": "Search the skill registry. Returns a ranked shortlist with each skill's \
-                            content digest and declared risk level, so the caller can choose.",
-            "inputSchema": {
-                "type": "object",
-                "required": ["query"],
-                "properties": {
-                    "query": { "type": "string", "description": "Free text; terms are matched against name, description and bundle." },
-                    "limit": { "type": "integer", "default": 10, "minimum": 1, "maximum": 50 },
-                },
-            },
-        }),
-        json!({
-            "name": "agtmls_show",
-            "description": "Full record for one skill, including its content digest and the tools \
-                            its frontmatter grants.",
-            "inputSchema": {
-                "type": "object",
-                "required": ["name"],
-                "properties": { "name": { "type": "string" } },
-            },
-        }),
-        json!({
-            "name": "agtmls_audit",
-            "description": "Statically analyse skill content for prompt injection, invisible-character \
-                            smuggling, capability escalation and unsafe execution. Pass `content` to \
-                            audit text you already have, or `name` to audit a skill in the registry. \
-                            Nothing is sent anywhere.",
-            "inputSchema": {
-                "type": "object",
-                "properties": {
-                    "name": { "type": "string", "description": "A skill in the registry." },
-                    "content": { "type": "string", "description": "Text to analyse directly." },
-                    "filename": { "type": "string", "default": "SKILL.md", "description": "Used to decide which rules apply." },
-                },
-            },
-        }),
-        json!({
-            "name": "agtmls_digest",
-            "description": "Content address for a skill in the registry, per agtmls-spec 3.1. \
-                            Identical to what the CLI computes.",
-            "inputSchema": {
-                "type": "object",
-                "required": ["name"],
-                "properties": { "name": { "type": "string" } },
-            },
-        }),
-        json!({
-            "name": "agtmls_verify",
-            "description": "Check an installed tree against its .agtmls/manifest.json lockfile. \
-                            Reports modification, deletion and unmanaged skills; never repairs and \
-                            never deletes.",
-            "inputSchema": {
-                "type": "object",
-                "required": ["target"],
-                "properties": {
-                    "target": { "type": "string", "description": "Repository root containing .agtmls/manifest.json." },
-                    "agent": { "type": "string", "enum": ["claude", "codex", "aider"], "default": "claude" },
-                },
-            },
-        }),
+        schemas::search_descriptor(),
+        schemas::show_descriptor(),
+        schemas::audit_descriptor(),
+        schemas::digest_descriptor(),
+        schemas::verify_descriptor(),
     ]
 }
 
@@ -117,6 +61,60 @@ pub fn prompts() -> Vec<Value> {
             "arguments": [{ "name": "name", "description": "Skill to harden", "required": true }],
         }),
     ]
+}
+
+/// Render a named prompt for `prompts/get`.
+///
+/// # Errors
+/// Returns a message suitable for JSON-RPC `-32602` when the prompt name is
+/// unknown or the required `name` argument is missing or blank.
+pub fn get_prompt(name: &str, args: &Value, registry: Option<&Registry>) -> Result<Value, String> {
+    let (description, rubric) = match name {
+        "review-skill" => (
+            "Review a skill for correctness, routing quality and safety before publication.",
+            "1. Routing clarity: verify the frontmatter `name` and `description` state when \
+             to load the skill and when not to.\n\
+             2. Integrity: confirm `agtmls_digest` agrees with `index.json`.\n\
+             3. Static safety: run `agtmls_audit` and resolve every finding.\n\
+             4. Evidence: check that commands, gates and examples are reproducible.",
+        ),
+        "harden-skill" => (
+            "Narrow a skill's declared capabilities to the minimum its text actually needs.",
+            "1. Inventory every tool, filesystem write, command execution and network access \
+             implied by the skill text.\n\
+             2. Compare that inventory against `allowed_tools` and `risk` via `agtmls_show`.\n\
+             3. Propose the smallest `allowed_tools` set and narrowest guardrails that keep \
+             the workflow functional.",
+        ),
+        other => {
+            return Err(format!(
+                "unknown prompt `{other}`; expected `review-skill` or `harden-skill`"
+            ));
+        }
+    };
+    let skill_name = args["name"]
+        .as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| format!("missing required `name` argument for prompt `{name}`"))?;
+
+    let context = match registry.and_then(|r| r.read_skill_file(skill_name, "SKILL.md").ok()) {
+        Some(markdown) => {
+            format!("Skill `{skill_name}` (`SKILL.md`):\n\n```markdown\n{markdown}\n```")
+        }
+        None => format!(
+            "Target skill: `{skill_name}` (not preloaded from the registry; inspect \
+             `agtmls_show` / `agtmls_audit` or provide its `SKILL.md` content)."
+        ),
+    };
+    let text = format!("{description}\n\n{context}\n\nChecklist:\n{rubric}");
+    Ok(json!({
+        "description": description,
+        "messages": [{
+            "role": "user",
+            "content": { "type": "text", "text": text },
+        }],
+    }))
 }
 
 /// Resource descriptors, for `resources/list`.
@@ -162,9 +160,25 @@ pub fn read_resource(registry: &Registry, uri: &str) -> Result<(String, String),
     Ok((text, mime.to_owned()))
 }
 
-fn findings_report(findings: &[agtmls_core::Finding]) -> String {
+fn findings_payload(findings: &[agtmls_core::Finding]) -> (String, Value) {
+    let structured_items: Vec<Value> = findings
+        .iter()
+        .map(|f| {
+            json!({
+                "severity": f.severity,
+                "file": f.file.display().to_string(),
+                "line": f.line,
+                "rule": f.rule,
+                "message": f.message,
+            })
+        })
+        .collect();
+    let structured = json!({
+        "count": findings.len(),
+        "findings": structured_items,
+    });
     if findings.is_empty() {
-        return "No findings.".to_owned();
+        return ("No findings.".to_owned(), structured);
     }
     let mut out = format!("{} finding(s):\n", findings.len());
     for f in findings {
@@ -178,110 +192,188 @@ fn findings_report(findings: &[agtmls_core::Finding]) -> String {
             f.message
         );
     }
+    (out, structured)
+}
+
+fn required_str<'a>(args: &'a Value, key: &str, tool: &str) -> Result<&'a str, String> {
+    args[key]
+        .as_str()
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| format!("{tool} missing required non-empty `{key}` string argument"))
+}
+
+fn call_search(args: &Value, registry: Option<&Registry>) -> Result<(String, Value), String> {
+    let registry = registry.ok_or_else(|| NO_REGISTRY.to_owned())?;
+    let query = required_str(args, "query", "agtmls_search")?;
+    let limit = usize::try_from(args["limit"].as_u64().unwrap_or(10))
+        .unwrap_or(10)
+        .clamp(1, 50);
+    let hits = registry.search(query, limit);
+    let structured = json!({ "results": hits });
+    let text = if hits.is_empty() {
+        format!("No skill matches {query:?}.")
+    } else {
+        serde_json::to_string_pretty(&hits).unwrap_or_default()
+    };
+    Ok((text, structured))
+}
+
+fn call_show(args: &Value, registry: Option<&Registry>) -> Result<(String, Value), String> {
+    let registry = registry.ok_or_else(|| NO_REGISTRY.to_owned())?;
+    let name = required_str(args, "name", "agtmls_show")?;
+    let skill = registry
+        .get(name)
+        .ok_or_else(|| format!("no skill named {name:?} in registry; pass a valid skill `name`"))?;
+    let structured = serde_json::to_value(skill).map_err(|e| e.to_string())?;
+    let text = serde_json::to_string_pretty(skill).unwrap_or_default();
+    Ok((text, structured))
+}
+
+fn call_digest(args: &Value, registry: Option<&Registry>) -> Result<(String, Value), String> {
+    let registry = registry.ok_or_else(|| NO_REGISTRY.to_owned())?;
+    let name = required_str(args, "name", "agtmls_digest")?;
+    let skill = registry
+        .get(name)
+        .ok_or_else(|| format!("no skill named {name:?} in registry; pass a valid skill `name`"))?;
+    let computed = digest::skill_digest(&registry.root().join(&skill.path))
+        .map_err(|e| format!("cannot digest skill `{name}`: {e}"))?;
+    let recorded = skill.integrity.as_deref().unwrap_or("(not in index)");
+    let agrees = skill.integrity.as_deref() == Some(computed.as_str());
+    let text = format!("computed: {computed}\nindex:    {recorded}\nmatch:    {agrees}");
+    let structured = json!({
+        "computed": computed,
+        "index": recorded,
+        "match": agrees,
+    });
+    Ok((text, structured))
+}
+
+fn audit_skill_dir(analyzer: &Analyzer, skill_dir: &Path) -> (String, Value) {
+    let mut files: skill::SkillFiles = BTreeMap::new();
+    for entry in ["SKILL.md", "metadata.json"] {
+        if let Ok(text) = std::fs::read_to_string(skill_dir.join(entry)) {
+            files.insert(entry.to_owned(), text);
+        }
+    }
+    let mut findings = Vec::new();
+    for (path, content) in &files {
+        findings.extend(analyzer.audit_str(path, content));
+    }
+    findings.extend(skill::audit_skill(&files));
+    findings_payload(&findings)
+}
+
+fn non_empty_arg<'a>(args: &'a Value, key: &str) -> Option<&'a str> {
+    args[key].as_str().map(str::trim).filter(|s| !s.is_empty())
+}
+
+fn call_audit(args: &Value, registry: Option<&Registry>) -> Result<(String, Value), String> {
+    let analyzer = Analyzer::new(rules()?);
+    if let Some(content) = args["content"].as_str().filter(|s| !s.is_empty()) {
+        let filename = non_empty_arg(args, "filename").unwrap_or("SKILL.md");
+        return Ok(findings_payload(&analyzer.audit_str(filename, content)));
+    }
+    let Some(name) = non_empty_arg(args, "name") else {
+        return Err(
+            "agtmls_audit missing required input: pass `name` to audit a registry skill or `content` to audit text directly"
+                .to_owned(),
+        );
+    };
+    let registry = registry.ok_or_else(|| NO_REGISTRY.to_owned())?;
+    let skill = registry
+        .get(name)
+        .ok_or_else(|| format!("no skill named {name:?} in registry; pass a valid skill `name`"))?;
+    Ok(audit_skill_dir(
+        &analyzer,
+        &registry.root().join(&skill.path),
+    ))
+}
+
+fn agent_dot_dir(agent: &str) -> Result<&'static str, String> {
+    match agent {
+        "claude" => Ok(".claude"),
+        "codex" => Ok(".codex"),
+        "aider" => Ok(".aider"),
+        other => Err(format!(
+            "invalid `agent` value {other:?}; must be one of `claude`, `codex`, or `aider`"
+        )),
+    }
+}
+
+fn format_verify_problems(problems: &[String], integrity_failures: usize) -> String {
+    if problems.is_empty() {
+        return "OK: every recorded skill matches the lockfile.".to_owned();
+    }
+    let mut out = String::new();
+    for line in problems {
+        let _ = writeln!(out, "{line}");
+    }
+    let _ = write!(
+        out,
+        "\n{} problem(s); {integrity_failures} affect integrity.",
+        problems.len(),
+    );
     out
 }
 
-/// Dispatch a tool call.
+fn call_verify(args: &Value) -> Result<(String, Value), String> {
+    let target = Path::new(required_str(args, "target", "agtmls_verify")?);
+    let dot = agent_dot_dir(args["agent"].as_str().unwrap_or("claude"))?;
+    let skills_dir = target.join(dot).join("skills");
+    let problems = match lockfile::verify(target, &skills_dir) {
+        Ok(items) => items,
+        Err(e) => {
+            return Err(format!(
+                "cannot verify `target` directory {}: {e}; pass a repository root containing .agtmls/manifest.json",
+                target.display()
+            ));
+        }
+    };
+    let mut integrity_failures = 0usize;
+    let mut problem_strings = Vec::with_capacity(problems.len());
+    for problem in &problems {
+        if problem.is_integrity_failure() {
+            integrity_failures += 1;
+        }
+        problem_strings.push(format!("{problem:?}"));
+    }
+    let text = format_verify_problems(&problem_strings, integrity_failures);
+    let structured = json!({
+        "ok": problems.is_empty(),
+        "problem_count": problems.len(),
+        "integrity_failures": integrity_failures,
+        "problems": problem_strings,
+    });
+    Ok((text, structured))
+}
+
+/// Dispatch a tool call and return both human-readable text and structured JSON.
+///
+/// # Errors
+/// Returns the actionable message to surface to the model when a call cannot complete.
+pub fn call_structured(
+    name: &str,
+    args: &Value,
+    registry: Option<&Registry>,
+) -> Result<(String, Value), String> {
+    match name {
+        "agtmls_search" => call_search(args, registry),
+        "agtmls_show" => call_show(args, registry),
+        "agtmls_digest" => call_digest(args, registry),
+        "agtmls_audit" => call_audit(args, registry),
+        "agtmls_verify" => call_verify(args),
+        other => Err(format!(
+            "unknown tool: {other}; expected agtmls_search, agtmls_show, agtmls_audit, agtmls_digest, or agtmls_verify"
+        )),
+    }
+}
+
+/// Dispatch a tool call, returning its text representation.
 ///
 /// # Errors
 /// Returns the message to surface to the model. Tool failures are content,
 /// not protocol errors: the model is meant to read them and decide.
 pub fn call(name: &str, args: &Value, registry: Option<&Registry>) -> Result<String, String> {
-    match name {
-        "agtmls_search" => {
-            let registry = registry.ok_or_else(|| NO_REGISTRY.to_owned())?;
-            let query = args["query"]
-                .as_str()
-                .ok_or("agtmls_search needs a query")?;
-            let limit = usize::try_from(args["limit"].as_u64().unwrap_or(10))
-                .unwrap_or(10)
-                .clamp(1, 50);
-            let hits = registry.search(query, limit);
-            if hits.is_empty() {
-                return Ok(format!("No skill matches {query:?}."));
-            }
-            Ok(serde_json::to_string_pretty(&hits).unwrap_or_default())
-        }
-        "agtmls_show" => {
-            let registry = registry.ok_or_else(|| NO_REGISTRY.to_owned())?;
-            let name = args["name"].as_str().ok_or("agtmls_show needs a name")?;
-            let skill = registry
-                .get(name)
-                .ok_or_else(|| format!("no skill named {name:?}"))?;
-            Ok(serde_json::to_string_pretty(skill).unwrap_or_default())
-        }
-        "agtmls_digest" => {
-            let registry = registry.ok_or_else(|| NO_REGISTRY.to_owned())?;
-            let name = args["name"].as_str().ok_or("agtmls_digest needs a name")?;
-            let skill = registry
-                .get(name)
-                .ok_or_else(|| format!("no skill named {name:?}"))?;
-            let computed = digest::skill_digest(&registry.root().join(&skill.path))
-                .map_err(|e| format!("cannot digest {name}: {e}"))?;
-            let recorded = skill.integrity.as_deref().unwrap_or("(not in index)");
-            let agrees = skill.integrity.as_deref() == Some(computed.as_str());
-            Ok(format!(
-                "computed: {computed}\nindex:    {recorded}\nmatch:    {agrees}"
-            ))
-        }
-        "agtmls_audit" => {
-            let analyzer = Analyzer::new(rules()?);
-            if let Some(content) = args["content"].as_str() {
-                let filename = args["filename"].as_str().unwrap_or("SKILL.md");
-                return Ok(findings_report(&analyzer.audit_str(filename, content)));
-            }
-            let registry = registry.ok_or_else(|| NO_REGISTRY.to_owned())?;
-            let name = args["name"]
-                .as_str()
-                .ok_or("agtmls_audit needs name or content")?;
-            let skill_dir = {
-                let skill = registry
-                    .get(name)
-                    .ok_or_else(|| format!("no skill named {name:?}"))?;
-                registry.root().join(&skill.path)
-            };
-            let mut files: skill::SkillFiles = BTreeMap::new();
-            for entry in ["SKILL.md", "metadata.json"] {
-                if let Ok(text) = std::fs::read_to_string(skill_dir.join(entry)) {
-                    files.insert(entry.to_owned(), text);
-                }
-            }
-            let mut findings = Vec::new();
-            for (path, content) in &files {
-                findings.extend(analyzer.audit_str(path, content));
-            }
-            findings.extend(skill::audit_skill(&files));
-            Ok(findings_report(&findings))
-        }
-        "agtmls_verify" => {
-            let target = Path::new(
-                args["target"]
-                    .as_str()
-                    .ok_or("agtmls_verify needs a target")?,
-            );
-            let agent = args["agent"].as_str().unwrap_or("claude");
-            let dot = match agent {
-                "claude" => ".claude",
-                "codex" => ".codex",
-                "aider" => ".aider",
-                other => return Err(format!("unknown agent {other:?}")),
-            };
-            let problems = lockfile::verify(target, &target.join(dot).join("skills"))?;
-            if problems.is_empty() {
-                return Ok("OK: every recorded skill matches the lockfile.".to_owned());
-            }
-            let mut out = String::new();
-            for problem in &problems {
-                let _ = writeln!(out, "{problem:?}");
-            }
-            let _ = write!(
-                out,
-                "\n{} problem(s); {} affect integrity.",
-                problems.len(),
-                problems.iter().filter(|p| p.is_integrity_failure()).count()
-            );
-            Ok(out)
-        }
-        other => Err(format!("unknown tool: {other}")),
-    }
+    call_structured(name, args, registry).map(|(text, _)| text)
 }

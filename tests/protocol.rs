@@ -176,3 +176,144 @@ fn search_and_show_answer_from_the_real_registry() {
     // tell whether what it fetched is what was published.
     assert!(text.contains("integrity"), "search results carry no digest");
 }
+
+#[test]
+fn every_tool_declares_parameter_docs_annotations_and_output_schema() {
+    let reply = call(
+        &json!({"jsonrpc":"2.0","id":10,"method":"tools/list"}),
+        None,
+    );
+    let tools = reply["result"]["tools"].as_array().expect("tools array");
+    assert_eq!(tools.len(), 5);
+    for tool in tools {
+        let name = tool["name"].as_str().expect("tool name");
+        assert!(
+            tool["title"].as_str().is_some_and(|t| !t.trim().is_empty()),
+            "{name} missing title"
+        );
+        assert_eq!(tool["annotations"]["readOnlyHint"], true, "{name}");
+        assert_eq!(tool["annotations"]["destructiveHint"], false, "{name}");
+        assert_eq!(tool["annotations"]["idempotentHint"], true, "{name}");
+        assert_eq!(tool["annotations"]["openWorldHint"], false, "{name}");
+        assert_eq!(tool["outputSchema"]["type"], "object", "{name}");
+
+        let props = tool["inputSchema"]["properties"]
+            .as_object()
+            .expect("properties object");
+        for (param, schema) in props {
+            assert!(
+                schema["description"]
+                    .as_str()
+                    .is_some_and(|d| !d.trim().is_empty()),
+                "{name}.{param} must declare a non-empty description"
+            );
+        }
+    }
+}
+
+#[test]
+fn prompts_get_renders_messages_and_rejects_missing_arguments() {
+    let reg = registry();
+    for prompt in ["review-skill", "harden-skill"] {
+        let rendered = call(
+            &json!({
+                "jsonrpc": "2.0",
+                "id": 11,
+                "method": "prompts/get",
+                "params": { "name": prompt, "arguments": { "name": "example" } }
+            }),
+            reg.as_ref(),
+        );
+        assert!(rendered["error"].is_null(), "{prompt} failed: {rendered}");
+        let msgs = rendered["result"]["messages"]
+            .as_array()
+            .expect("messages array");
+        assert!(!msgs.is_empty(), "{prompt} returned empty messages");
+        assert_eq!(msgs[0]["role"], "user");
+        assert_eq!(msgs[0]["content"]["type"], "text");
+        assert!(
+            msgs[0]["content"]["text"]
+                .as_str()
+                .is_some_and(|t| t.contains("example")),
+            "{prompt} message did not reference argument: {rendered}"
+        );
+
+        let missing = call(
+            &json!({
+                "jsonrpc": "2.0",
+                "id": 12,
+                "method": "prompts/get",
+                "params": { "name": prompt }
+            }),
+            reg.as_ref(),
+        );
+        assert_eq!(
+            missing["error"]["code"], -32602,
+            "{prompt} must reject missing required argument with -32602: {missing}"
+        );
+    }
+
+    let unknown = call(
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 13,
+            "method": "prompts/get",
+            "params": { "name": "no-such-prompt", "arguments": { "name": "example" } }
+        }),
+        reg.as_ref(),
+    );
+    assert_eq!(unknown["error"]["code"], -32602);
+}
+
+#[test]
+fn tool_calls_emit_structured_content_on_success_and_omit_it_on_error() {
+    let reg = registry().expect("agtmls registry available");
+    let search = call(
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 14,
+            "method": "tools/call",
+            "params": { "name": "agtmls_search", "arguments": { "query": "debugging" } }
+        }),
+        Some(&reg),
+    );
+    assert_eq!(search["result"]["isError"], false);
+    assert!(search["result"]["structuredContent"]["results"].is_array());
+
+    let skill_name = reg.skills.first().expect("skill").name.clone();
+    let show = call(
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 15,
+            "method": "tools/call",
+            "params": { "name": "agtmls_show", "arguments": { "name": skill_name } }
+        }),
+        Some(&reg),
+    );
+    assert_eq!(show["result"]["isError"], false);
+    assert_eq!(show["result"]["structuredContent"]["name"], skill_name);
+
+    let digest = call(
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 16,
+            "method": "tools/call",
+            "params": { "name": "agtmls_digest", "arguments": { "name": skill_name } }
+        }),
+        Some(&reg),
+    );
+    assert_eq!(digest["result"]["isError"], false);
+    assert_eq!(digest["result"]["structuredContent"]["match"], true);
+
+    let failed = call(
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 17,
+            "method": "tools/call",
+            "params": { "name": "agtmls_show", "arguments": { "name": "no-such-skill" } }
+        }),
+        Some(&reg),
+    );
+    assert_eq!(failed["result"]["isError"], true);
+    assert!(failed["result"].get("structuredContent").is_none());
+}
