@@ -6,7 +6,7 @@
   "title": "agtmls-mcp",
   "display_name": "AgtMLS MCP",
   "description": "Model Context Protocol server for the AgtMLS agent skills registry: search, read, audit and verify skills over JSON-RPC. Statically analyse skill content for prompt injection, invisible-character smuggling, capability escalation and unsafe execution.",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "repository": "https://github.com/sebastienrousseau/agtmls-mcp",
   "homepage": "https://github.com/sebastienrousseau/agtmls-mcp",
   "license": "Apache-2.0 OR MIT",

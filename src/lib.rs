@@ -25,6 +25,7 @@
 #![forbid(unsafe_code)]
 
 pub mod registry;
+mod schemas;
 pub mod tools;
 
 use serde_json::{Value, json};
@@ -68,11 +69,101 @@ fn reply(id: Option<&Value>, result: Value) -> String {
 /// Tool call results are reported inside a successful envelope with
 /// `isError`, not as a JSON-RPC error: the model is meant to read the failure
 /// and decide what to do, and a protocol-level error takes that choice away.
-fn tool_result(id: Option<&Value>, text: &str, is_error: bool) -> String {
+fn tool_ok(id: Option<&Value>, text: &str, structured: &Value) -> String {
     reply(
         id,
-        json!({ "content": [{ "type": "text", "text": text }], "isError": is_error }),
+        json!({
+            "content": [{ "type": "text", "text": text }],
+            "structuredContent": structured,
+            "isError": false,
+        }),
     )
+}
+
+fn tool_err(id: Option<&Value>, text: &str) -> String {
+    reply(
+        id,
+        json!({
+            "content": [{ "type": "text", "text": text }],
+            "isError": true,
+        }),
+    )
+}
+
+fn handle_resources_read(
+    id: Option<&Value>,
+    params: &Value,
+    registry: Option<&Registry>,
+) -> HandleOutcome {
+    let Some(uri) = params["uri"].as_str() else {
+        return HandleOutcome::Reply(error(id, -32602, "resources/read needs a uri"));
+    };
+    let Some(registry) = registry else {
+        return HandleOutcome::Reply(error(id, -32002, tools::NO_REGISTRY));
+    };
+    match tools::read_resource(registry, uri) {
+        Ok((text, mime)) => HandleOutcome::Reply(reply(
+            id,
+            json!({ "contents": [{ "uri": uri, "mimeType": mime, "text": text }] }),
+        )),
+        Err(message) => HandleOutcome::Reply(error(id, -32002, &message)),
+    }
+}
+
+fn handle_prompts_get(
+    id: Option<&Value>,
+    params: &Value,
+    registry: Option<&Registry>,
+) -> HandleOutcome {
+    let Some(name) = params["name"].as_str() else {
+        return HandleOutcome::Reply(error(id, -32602, "prompts/get needs a name"));
+    };
+    match tools::get_prompt(name, &params["arguments"], registry) {
+        Ok(rendered) => HandleOutcome::Reply(reply(id, rendered)),
+        Err(message) => HandleOutcome::Reply(error(id, -32602, &message)),
+    }
+}
+
+fn handle_tools_call(
+    id: Option<&Value>,
+    params: &Value,
+    registry: Option<&Registry>,
+) -> HandleOutcome {
+    let Some(name) = params["name"].as_str() else {
+        return HandleOutcome::Reply(error(id, -32602, "tools/call needs a name"));
+    };
+    match tools::call_structured(name, &params["arguments"], registry) {
+        Ok((text, structured)) => HandleOutcome::Reply(tool_ok(id, &text, &structured)),
+        Err(message) => HandleOutcome::Reply(tool_err(id, &message)),
+    }
+}
+
+fn dispatch_catalog(
+    id: Option<&Value>,
+    method: &str,
+    params: &Value,
+    registry: Option<&Registry>,
+) -> Option<HandleOutcome> {
+    match method {
+        "tools/list" => Some(HandleOutcome::Reply(reply(
+            id,
+            json!({ "tools": tools::descriptors() }),
+        ))),
+        "prompts/list" => Some(HandleOutcome::Reply(reply(
+            id,
+            json!({ "prompts": tools::prompts() }),
+        ))),
+        "prompts/get" => Some(handle_prompts_get(id, params, registry)),
+        "resources/list" => Some(match registry {
+            Some(reg) => {
+                HandleOutcome::Reply(reply(id, json!({ "resources": tools::resources(reg) })))
+            }
+            None => HandleOutcome::Reply(error(id, -32002, tools::NO_REGISTRY)),
+        }),
+        "resources/read" => Some(handle_resources_read(id, params, registry)),
+        "tools/call" => Some(handle_tools_call(id, params, registry)),
+        _ => None,
+    }
 }
 
 /// Handle one JSON-RPC message.
@@ -90,6 +181,9 @@ pub fn handle_message(line: &str, registry: Option<&Registry>) -> HandleOutcome 
         return HandleOutcome::Reply(error(id, -32600, "invalid request: no method"));
     };
     let params = &message["params"];
+    if let Some(outcome) = dispatch_catalog(id, method, params, registry) {
+        return outcome;
+    }
 
     match method {
         "initialize" => HandleOutcome::Reply(reply(
@@ -103,43 +197,6 @@ pub fn handle_message(line: &str, registry: Option<&Registry>) -> HandleOutcome 
         "notifications/initialized" | "notifications/cancelled" => HandleOutcome::Silent,
         "ping" => HandleOutcome::Reply(reply(id, json!({}))),
         "shutdown" => HandleOutcome::Shutdown,
-
-        "tools/list" => HandleOutcome::Reply(reply(id, json!({ "tools": tools::descriptors() }))),
-        "prompts/list" => HandleOutcome::Reply(reply(id, json!({ "prompts": tools::prompts() }))),
-        "resources/list" => match registry {
-            Some(registry) => HandleOutcome::Reply(reply(
-                id,
-                json!({ "resources": tools::resources(registry) }),
-            )),
-            None => HandleOutcome::Reply(error(id, -32002, tools::NO_REGISTRY)),
-        },
-
-        "resources/read" => {
-            let Some(uri) = params["uri"].as_str() else {
-                return HandleOutcome::Reply(error(id, -32602, "resources/read needs a uri"));
-            };
-            let Some(registry) = registry else {
-                return HandleOutcome::Reply(error(id, -32002, tools::NO_REGISTRY));
-            };
-            match tools::read_resource(registry, uri) {
-                Ok((text, mime)) => HandleOutcome::Reply(reply(
-                    id,
-                    json!({ "contents": [{ "uri": uri, "mimeType": mime, "text": text }] }),
-                )),
-                Err(message) => HandleOutcome::Reply(error(id, -32002, &message)),
-            }
-        }
-
-        "tools/call" => {
-            let Some(name) = params["name"].as_str() else {
-                return HandleOutcome::Reply(error(id, -32602, "tools/call needs a name"));
-            };
-            match tools::call(name, &params["arguments"], registry) {
-                Ok(text) => HandleOutcome::Reply(tool_result(id, &text, false)),
-                Err(message) => HandleOutcome::Reply(tool_result(id, &message, true)),
-            }
-        }
-
         other => HandleOutcome::Reply(error(id, -32601, &format!("method not found: {other}"))),
     }
 }

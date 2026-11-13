@@ -3,7 +3,25 @@
 
 # Changelog
 
-## [Unreleased]
+## [0.0.3] - Unreleased
+
+### Added
+
+- `prompts/get` handler rendering `review-skill` and `harden-skill` messages and
+  rejecting missing required arguments with JSON-RPC `-32602`.
+- Read-only behaviour annotations (`readOnlyHint`, `destructiveHint`,
+  `idempotentHint`, `openWorldHint`), human titles, parameter descriptions and
+  constraints, and `outputSchema` / `structuredContent` across all five tools.
+
+### Changed
+
+- `KEYS.asc` trusts a second maintainer signing key,
+  `SHA256:kIOPAavp1TCEauTr1tTIN3cv+tSs6F9m/4lZjuM9tqk`, so release tags can
+  be signed on either maintainer machine. Each key line now carries its
+  fingerprint for out-of-band checks.
+- **The MSRV is now Rust 1.89.0** (was 1.86.0), the floor shared by the
+  portfolio's Rust repositories. `rust-version` and the README badge move
+  together.
 
 ## [0.0.2] - 2026-10-03
 
