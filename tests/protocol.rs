@@ -317,3 +317,76 @@ fn tool_calls_emit_structured_content_on_success_and_omit_it_on_error() {
     assert_eq!(failed["result"]["isError"], true);
     assert!(failed["result"].get("structuredContent").is_none());
 }
+
+#[test]
+fn verify_supports_native_agents() {
+    let list = call(
+        &json!({"jsonrpc":"2.0","id":18,"method":"tools/list"}),
+        None,
+    );
+    let verify_tool = list["result"]["tools"]
+        .as_array()
+        .and_then(|ts| ts.iter().find(|t| t["name"] == "agtmls_verify"))
+        .expect("agtmls_verify descriptor");
+    let agents = verify_tool["inputSchema"]["properties"]["agent"]["enum"]
+        .as_array()
+        .expect("agent enum");
+    assert!(agents.contains(&json!("antigravity")), "{agents:?}");
+
+    let root = std::env::temp_dir().join(format!("agtmls-mcp-verify-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&root);
+    let skill_dir = root.join(".agents/skills/sample");
+    std::fs::create_dir_all(&skill_dir).expect("create skill dir");
+    std::fs::write(skill_dir.join("SKILL.md"), "# sample\n").expect("write skill");
+    let digest = agtmls_core::skill_digest(&skill_dir).expect("digest");
+    std::fs::create_dir_all(root.join(".agtmls")).expect("create .agtmls");
+    std::fs::write(
+        root.join(".agtmls/manifest.json"),
+        json!({
+            "schema_version": 1,
+            "spec_version": "0.1.0",
+            "installed_at": "2026-11-13T00:00:00Z",
+            "source": { "registry": "https://example.com", "registry_version": "0.0.0" },
+            "mode": "copy",
+            "skills": [{ "name": "sample", "integrity": digest, "path": "sample", "agents": ["antigravity"] }],
+        })
+        .to_string(),
+    )
+    .expect("write manifest");
+
+    let verified = call(
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 19,
+            "method": "tools/call",
+            "params": {
+                "name": "agtmls_verify",
+                "arguments": { "target": root.display().to_string(), "agent": "antigravity" }
+            }
+        }),
+        None,
+    );
+    let _ = std::fs::remove_dir_all(&root);
+    assert_eq!(verified["result"]["isError"], false, "{verified}");
+    assert_eq!(verified["result"]["structuredContent"]["ok"], true);
+}
+
+#[test]
+fn audit_runs_structural_rules_against_the_registry() {
+    if std::env::var_os("AGTMLS_SPEC").is_none() {
+        return;
+    }
+    let reg = registry().expect("agtmls registry available");
+    let skill_name = reg.skills.first().expect("skill").name.clone();
+    let audited = call(
+        &json!({
+            "jsonrpc": "2.0",
+            "id": 20,
+            "method": "tools/call",
+            "params": { "name": "agtmls_audit", "arguments": { "name": skill_name } }
+        }),
+        Some(&reg),
+    );
+    assert_eq!(audited["result"]["isError"], false, "{audited}");
+    assert!(audited["result"]["structuredContent"]["findings"].is_array());
+}

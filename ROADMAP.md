@@ -9,9 +9,6 @@ See [CHANGELOG.md](CHANGELOG.md) for what exists.
 
 ## Next
 
-- **Pin `agtmls-core` by version.** It is pinned by git revision until that
-  crate reaches crates.io. A revision pin is reproducible, but it is not
-  something a downstream consumer can audit as easily as a registry version.
 - **Publish.** The release workflow uses Trusted Publishing and needs a
   one-time registration; see `agtmls/docs/PUBLISHING.md`.
 

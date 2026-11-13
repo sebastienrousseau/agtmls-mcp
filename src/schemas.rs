@@ -185,6 +185,10 @@ pub(crate) fn digest_descriptor() -> Value {
 }
 
 pub(crate) fn verify_descriptor() -> Value {
+    let agents: Vec<&str> = agtmls_core::lockfile::NATIVE_AGENTS
+        .iter()
+        .map(|(name, _)| *name)
+        .collect();
     json!({
         "name": "agtmls_verify",
         "title": "Verify installed skills",
@@ -205,7 +209,7 @@ pub(crate) fn verify_descriptor() -> Value {
                 },
                 "agent": {
                     "type": "string",
-                    "enum": ["claude", "codex", "aider"],
+                    "enum": agents,
                     "default": "claude",
                     "description": "Agent directory layout under the target repository root.",
                 },
