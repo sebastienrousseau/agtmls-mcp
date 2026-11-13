@@ -111,7 +111,7 @@ agtmls-spec     rules + conformance corpus, the normative source
           └── agtmls-wasm   @agtmls/wasm
 ```
 
-`agtmls-core` is pinned by revision until it is published to crates.io. Strict
+`agtmls-core` is pinned to the exact crates.io release (`=0.0.3`). Strict
 lockstep is deliberate: this server reports findings by rule id, so a core with
 a different rule set would make its answers differ from the CLI's for the same
 input.

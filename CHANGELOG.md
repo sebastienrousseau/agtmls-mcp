@@ -3,7 +3,7 @@
 
 # Changelog
 
-## [0.0.3] - Unreleased
+## [0.0.3] - 2026-11-13
 
 ### Added
 
@@ -15,6 +15,12 @@
 
 ### Changed
 
+- **`agtmls-core` comes from crates.io**, pinned exactly at `=0.0.3` (was a git
+  revision), so this crate can be published and a consumer can audit the
+  dependency from the registry. `agtmls_audit` passes the loaded rule set to
+  `skill::audit_skill`, and `agtmls_verify` resolves native agent directories
+  (`aider`, `antigravity`, `claude`, `codex`) and per-agent lockfile entries
+  through `agtmls_core::lockfile`.
 - `KEYS.asc` trusts a second maintainer signing key,
   `SHA256:kIOPAavp1TCEauTr1tTIN3cv+tSs6F9m/4lZjuM9tqk`, so release tags can
   be signed on either maintainer machine. Each key line now carries its

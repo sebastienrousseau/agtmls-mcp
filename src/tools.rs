@@ -260,7 +260,7 @@ fn audit_skill_dir(analyzer: &Analyzer, skill_dir: &Path) -> (String, Value) {
     for (path, content) in &files {
         findings.extend(analyzer.audit_str(path, content));
     }
-    findings.extend(skill::audit_skill(&files));
+    findings.extend(skill::audit_skill(analyzer.rules(), &files));
     findings_payload(&findings)
 }
 
@@ -290,15 +290,17 @@ fn call_audit(args: &Value, registry: Option<&Registry>) -> Result<(String, Valu
     ))
 }
 
-fn agent_dot_dir(agent: &str) -> Result<&'static str, String> {
-    match agent {
-        "claude" => Ok(".claude"),
-        "codex" => Ok(".codex"),
-        "aider" => Ok(".aider"),
-        other => Err(format!(
-            "invalid `agent` value {other:?}; must be one of `claude`, `codex`, or `aider`"
-        )),
-    }
+fn agent_skills_dir(agent: &str) -> Result<&'static str, String> {
+    lockfile::skills_dir(agent).ok_or_else(|| {
+        let known: Vec<&str> = lockfile::NATIVE_AGENTS
+            .iter()
+            .map(|(name, _)| *name)
+            .collect();
+        format!(
+            "invalid `agent` value {agent:?}; must be one of {}",
+            known.join(", ")
+        )
+    })
 }
 
 fn format_verify_problems(problems: &[String], integrity_failures: usize) -> String {
@@ -319,9 +321,9 @@ fn format_verify_problems(problems: &[String], integrity_failures: usize) -> Str
 
 fn call_verify(args: &Value) -> Result<(String, Value), String> {
     let target = Path::new(required_str(args, "target", "agtmls_verify")?);
-    let dot = agent_dot_dir(args["agent"].as_str().unwrap_or("claude"))?;
-    let skills_dir = target.join(dot).join("skills");
-    let problems = match lockfile::verify(target, &skills_dir) {
+    let agent = args["agent"].as_str().unwrap_or("claude");
+    let skills_dir = target.join(agent_skills_dir(agent)?);
+    let problems = match lockfile::verify(target, &skills_dir, Some(agent)) {
         Ok(items) => items,
         Err(e) => {
             return Err(format!(
