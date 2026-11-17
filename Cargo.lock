@@ -4,9 +4,9 @@ version = 4
 
 [[package]]
 name = "agtmls-core"
-version = "0.0.3"
+version = "0.0.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "767f71c0fc85462dfc95abadae0ff2c0f81b16fdba39c115b84fda66b2e95b23"
+checksum = "a22e60721ec38c5dec6ab80fd102b578863e20d4bbb62c4f66c537e11d041a36"
 dependencies = [
  "regex",
  "serde",
@@ -18,7 +18,7 @@ dependencies = [
 
 [[package]]
 name = "agtmls-mcp"
-version = "0.0.3"
+version = "0.0.35"
 dependencies = [
  "agtmls-core",
  "serde",

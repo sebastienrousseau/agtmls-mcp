@@ -3,7 +3,7 @@
 
 [package]
 name = "agtmls-mcp"
-version = "0.0.3"
+version = "0.0.35"
 edition = "2024"
 rust-version = "1.89.0"
 license = "Apache-2.0 OR MIT"
@@ -28,7 +28,7 @@ path = "src/main.rs"
 # Strict lockstep: the MCP surface reports findings by rule id, so a core
 # whose rule set differs would make this server's answers differ from the
 # CLI's for the same input.
-agtmls-core = "=0.0.3"
+agtmls-core = "=0.0.35"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
