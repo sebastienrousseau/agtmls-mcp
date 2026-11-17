@@ -3,6 +3,18 @@
 
 # Changelog
 
+## [0.0.35] - 2026-11-17
+
+**In lockstep with the AgtMLS family.** Every member of the family now
+releases at one version, so agtmls-mcp moves from 0.0.3 to 0.0.35.
+
+### Changed
+
+- `agtmls-core` pinned at `=0.0.35` (was `=0.0.3`), which brings lockfile
+  path confinement (core 0.0.4) and JSON rule sources (core 0.0.5). `agtmls_audit` reads
+  the agtmls-spec 0.0.35 rules (57) from `AGTMLS_SPEC` as before; no
+  API change.
+
 ## [0.0.3] - 2026-11-13
 
 ### Added
